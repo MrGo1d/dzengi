@@ -9,10 +9,10 @@ from urllib.parse import quote
 
 load_dotenv()  # Загружает переменные из .env
 
-api_key = os.getenv("API_key")
-secret_key = os.getenv("secret_key")
-account_id = os.getenv("account_id")
-url = "https://demo-api-adapter.dzengi.com/api/v2"
+api_key: str = os.getenv("API_key")
+secret_key: str = os.getenv("secret_key")
+account_id: str = os.getenv("account_id")
+url: str = os.getenv("url")
 
 
 class Trade:
@@ -66,7 +66,7 @@ class Trade:
         timestamp = int(time.time() * 1000)
         query_params = [
             f"orderId={order_id}",
-            f"symbol={self.GetSymbol(symbol)["symbol"]}",
+            f"symbol={self.GetSymbol(symbol)}",
             f"timestamp={timestamp}",
             f"recvWindow={self.recv_window}",
             f"accountId={self.account_id}"
@@ -116,7 +116,7 @@ class Trade:
         """
         timestamp = int(time.time() * 1000)
         query_params = [
-            f"symbol={self.GetSymbol(symbol)["symbol"]}",
+            f"symbol={self.GetSymbol(symbol)}",
             f"side={side}",
             f"type={type_}",
             f"quantity={quantity}",
@@ -182,7 +182,7 @@ class Trade:
         query_params = [
             f"orderId={order_id}",
             f"type={type_}",
-            f"symbol={self.GetSymbol(symbol)["symbol"]}",
+            f"symbol={self.GetSymbol(symbol)}",
             f"side={side}",
             f"quantity={quantity}",
             f"timestamp={timestamp}",
@@ -259,10 +259,7 @@ class Trade:
                 if element.get("name") == name:
                     symbol = element.get("symbol")
                     break
-            return {
-                "name": name,
-                "symbol": symbol,
-            }
+            return symbol
         except Exception as ex:
             return {
                 "error": f"HTTP error: {ex}",
@@ -429,7 +426,7 @@ class Trade:
     def ListOfFees(self, symbol: str):
         """Получение информации обо всех системных сборах GET-запрос к /api/v2/tradingFees.
         symbol можно найти на ExchangeInfo"""
-        url = f"{self.url}/tradingFees?symbol={symbol}"
+        url = f"{self.url}/tradingFees?symbol={self.GetSymbol(symbol)}"
 
         try:
             response = requests.get(url)
@@ -462,7 +459,7 @@ class Trade:
         timestamp = int(time.time() * 1000)
         query_params = [f"timestamp={timestamp}", f"recvWindow={self.recv_window}"]
         if symbol:
-            query_params.append(f"symbol={symbol}")
+            query_params.append(f"symbol={self.GetSymbol(symbol)}")
         if from_:
             query_params.append(f"from={from_}")
         if to:
@@ -526,7 +523,7 @@ class Trade:
     def ListOfLimits(self, symbol: str):
         """Получение информации обо всех системных ограничениях GET-запрос к /api/v2/tradingLimits.
         symbol можно найти на ExchangeInfo"""
-        url = f"{self.url}/tradingLimits?symbol={symbol}"
+        url = f"{self.url}/tradingLimits?symbol={self.GetSymbol(symbol)}"
 
         try:
             response = requests.get(url)
@@ -548,12 +545,12 @@ class Trade:
                 "response_text": None
             }
 
-    def ListOfOpenOrders(self, symbol: None| str = None):
+    def ListOfOpenOrders(self, symbol: None|str = None):
         """Получение информации обо всех открытых заявках на аккаунте через GET-запрос к /api/v2/openOrders."""
         timestamp = int(time.time() * 1000)
         query_params = [f"timestamp={timestamp}", f"recvWindow={self.recv_window}"]
         if symbol:
-            query_params.append(f"symbol={symbol}")
+            query_params.append(f"symbol={self.GetSymbol(symbol)}")
         query_string = "&".join(query_params)
         signature = self._generate_signature(query_string)
         url = f"{self.url}/openOrders?{query_string}&signature={signature}"
@@ -581,14 +578,14 @@ class Trade:
 
     def ListOfTrades(
         self, 
+        symbol: str,
         start_time: None| int = None, 
-        end_time: None| int = None, 
-        symbol: None| str = None, 
+        end_time: None| int = None,  
         limit: None| int = None
         ):
         """Получение информации обо всех сделках по symbol на аккаунте через GET-запрос к /api/v2/myTrades."""
         timestamp = int(time.time() * 1000)
-        query_params = [f"timestamp={timestamp}", f"recvWindow={self.recv_window}", f"symbol={self.GetSymbol(symbol)["symbol"]}"]
+        query_params = [f"timestamp={timestamp}", f"recvWindow={self.recv_window}", f"symbol={self.GetSymbol(symbol)}"]
         if start_time:
             query_params.append(f"startTime={start_time}")
         if end_time:
@@ -619,6 +616,66 @@ class Trade:
                 "error": f"Request failed: {req_err}",
                 "response_text": None
             }
+
+    def OrderBook(self, symbol: str):
+        """Получение информации обо всех заявках на аккаунте через GET-запрос к /api/v2/depth"""
+        timestamp = int(time.time() * 1000)
+        query_params = [f"timestamp={timestamp}", f"recvWindow={self.recv_window}", f"symbol={self.GetSymbol(symbol)}"]
+        query_string = "&".join(query_params)
+        signature = self._generate_signature(query_string)
+        url = f"{self.url}/depth?{query_string}&signature={signature}"
+
+        headers = {"X-MBX-APIKEY": self.api_key}
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()  # Проверяем, нет ли ошибок HTTP
+            return {
+                "status_code": response.status_code,
+                "data": response.json(),
+            }
+        except requests.exceptions.HTTPError as http_err:
+            return {
+                "status_code": response.status_code,
+                "error": f"HTTP error: {http_err}",
+                "response_text": response.text
+            }
+        except requests.exceptions.RequestException as req_err:
+            return {
+                "status_code": None,
+                "error": f"Request failed: {req_err}",
+                "response_text": None
+            }    
+
+    def PriceChange(self, symbol: None|str = None):
+        """Получение информации статистике изменения цен за последние 24ч через GET-запрос к /api/v2/ticker/24h"""
+        timestamp = int(time.time() * 1000)
+        query_params = [f"timestamp={timestamp}", f"recvWindow={self.recv_window}",]
+        if symbol:
+            query_params.append(f"symbol={self.GetSymbol(symbol)}")
+        query_string = "&".join(query_params)
+        signature = self._generate_signature(query_string)
+        url = f"{self.url}/ticker/24hr?{query_string}&signature={signature}"
+
+        headers = {"X-MBX-APIKEY": self.api_key}
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()  # Проверяем, нет ли ошибок HTTP
+            return {
+                "status_code": response.status_code,
+                "data": response.json(),
+            }
+        except requests.exceptions.HTTPError as http_err:
+            return {
+                "status_code": response.status_code,
+                "error": f"HTTP error: {http_err}",
+                "response_text": response.text
+            }
+        except requests.exceptions.RequestException as req_err:
+            return {
+                "status_code": None,
+                "error": f"Request failed: {req_err}",
+                "response_text": None
+            }    
 
     def ServerTime(self):
         """Тест соединения с сервером и получение севрерного времени/api/v2/time."""
@@ -682,5 +739,5 @@ class Trade:
 
 trade = Trade(api_key, secret_key)
 
-request = trade.AccountInfo()
+request = trade.PriceChange(symbol="Gold")
 print(request)
