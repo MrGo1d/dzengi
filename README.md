@@ -40,3 +40,8 @@ close = trade.TradingPositionClose(
     position_id="28601567-1e55-311e-0000-00008087365b"
 )
 
+
+# Get info about kline/candlestick bars for a symbol
+klines = trade.Klines(
+    symbol="Gold", 
+    interval="1h")

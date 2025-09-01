@@ -265,6 +265,54 @@ class Trade:
                 "error": f"HTTP error: {ex}",
             }
 
+    def Klines(
+        self, 
+        symbol: str,
+        interval: str,
+        start_time: None| int = None, 
+        end_time: None| int = None,  
+        limit: None| int = None,
+        price_type: None| int = None,
+        type_: None| int = None,
+        ):
+        """Получение информации о клайн/свечках по символу через GET-запрос к /api/v2/klines."""
+        timestamp = int(time.time() * 1000)
+        query_params = [f"timestamp={timestamp}", f"recvWindow={self.recv_window}", f"symbol={self.GetSymbol(symbol)}", f"interval={interval }"]
+        if start_time:
+            query_params.append(f"startTime={start_time}")
+        if end_time:
+            query_params.append(f"endTime={end_time}")
+        if limit:
+            query_params.append(f"limit={limit}")
+        if price_type:
+            query_params.append(f"priceType={price_type}")
+        if type_:
+            query_params.append(f"type={type_}")
+        query_string = "&".join(query_params)
+        signature = self._generate_signature(query_string)
+        url = f"{self.url}/klines?{query_string}&signature={signature}"
+
+        headers = {"X-MBX-APIKEY": self.api_key}
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()  # Проверяем, нет ли ошибок HTTP
+            return {
+                "status_code": response.status_code,
+                "data": response.json(),
+            }
+        except requests.exceptions.HTTPError as http_err:
+            return {
+                "status_code": response.status_code,
+                "error": f"HTTP error: {http_err}",
+                "response_text": response.text
+            }
+        except requests.exceptions.RequestException as req_err:
+            return {
+                "status_code": None,
+                "error": f"Request failed: {req_err}",
+                "response_text": None
+            }
+
     def LeverageOrdersEdit(
         self, 
         order_id: str,
@@ -735,9 +783,3 @@ class Trade:
                 "error": f"Request failed: {req_err}",
                 "response_text": None
             }
-
-
-trade = Trade(api_key, secret_key)
-
-request = trade.PriceChange(symbol="Gold")
-print(request)
